@@ -24,6 +24,7 @@ load_dotenv(".env.local")
 
 class Assistant(Agent):
     def __init__(self, instructions: str = None) -> None:
+        # Use provided instructions or default ones
         if instructions is None:
             instructions = """You are a helpful voice AI assistant. The user is interacting with you via voice, even if you perceive the conversation as text.
             You eagerly assist users with their questions by providing information from your extensive knowledge.
@@ -50,10 +51,6 @@ class Assistant(Agent):
     #     return "sunny with a temperature of 70 degrees."
 
 
-def prewarm(proc: JobProcess):
-    proc.userdata["vad"] = silero.VAD.load()
-
-
 async def fetch_instructions_from_api(api_url: str) -> str:
     """
     Fetch instructions from an API endpoint.
@@ -74,12 +71,22 @@ async def fetch_instructions_from_api(api_url: str) -> str:
             async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:
                     data = await response.json()
-                    instructions = data.get('instructions', '')
+                    result = data.get("result", {})
+                    logger.info(f"API results: {result}")
+                    
+                    # Extract instructions from the API response
+                    # Adjust this based on your actual API response structure
+                    lead_meta = result.get("leadProfileMetadata") or {}
+                    logger.info(f"Lead metadata: {lead_meta}")
+                    
+                    # Get prompt or instructions from the result
+                    instructions = result.get("prompt") or lead_meta.get("instructions") or ""
+                    
                     if instructions:
                         logger.info(f"Successfully fetched instructions from API: {api_url}")
                         return instructions
                     else:
-                        logger.warning("API response did not contain 'instructions' field, using default")
+                        logger.warning("API response did not contain instructions, using default")
                         return default_instructions
                 else:
                     logger.error(f"API returned status {response.status}, using default instructions")
@@ -90,6 +97,10 @@ async def fetch_instructions_from_api(api_url: str) -> str:
     except Exception as e:
         logger.error(f"Unexpected error fetching instructions: {e}, using default instructions")
         return default_instructions
+
+
+def prewarm(proc: JobProcess):
+    proc.userdata["vad"] = silero.VAD.load()
 
 
 async def entrypoint(ctx: JobContext):
@@ -153,7 +164,7 @@ async def entrypoint(ctx: JobContext):
     # await avatar.start(session, room=ctx.room)
 
     # Fetch instructions from API
-    api_url = os.getenv('INSTRUCTIONS_API_URL', 'http://localhost:8080/api/instructions')
+    api_url = os.getenv('INSTRUCTIONS_API_URL', 'http://api-dev.insureplat.com/api/services/app/Bot/flattenBot?botId=202&version=2')
     instructions = await fetch_instructions_from_api(api_url)
     
     # Start the session, which initializes the voice pipeline and warms up the models
