@@ -1,4 +1,6 @@
 import logging
+import os
+import aiohttp
 
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -21,13 +23,14 @@ load_dotenv(".env.local")
 
 
 class Assistant(Agent):
-    def __init__(self) -> None:
-        super().__init__(
-            instructions="""You are a helpful voice AI assistant. The user is interacting with you via voice, even if you perceive the conversation as text.
+    def __init__(self, instructions: str = None) -> None:
+        if instructions is None:
+            instructions = """You are a helpful voice AI assistant. The user is interacting with you via voice, even if you perceive the conversation as text.
             You eagerly assist users with their questions by providing information from your extensive knowledge.
             Your responses are concise, to the point, and without any complex formatting or punctuation including emojis, asterisks, or other symbols.
-            You are curious, friendly, and have a sense of humor.""",
-        )
+            You are curious, friendly, and have a sense of humor."""
+        
+        super().__init__(instructions=instructions)
 
     # To add tools, use the @function_tool decorator.
     # Here's an example that adds a simple weather tool.
@@ -49,6 +52,44 @@ class Assistant(Agent):
 
 def prewarm(proc: JobProcess):
     proc.userdata["vad"] = silero.VAD.load()
+
+
+async def fetch_instructions_from_api(api_url: str) -> str:
+    """
+    Fetch instructions from an API endpoint.
+    
+    Args:
+        api_url: The API endpoint URL to fetch instructions from
+        
+    Returns:
+        The instructions string from the API, or default instructions if API fails
+    """
+    default_instructions = """You are a helpful voice AI assistant. The user is interacting with you via voice, even if you perceive the conversation as text.
+    You eagerly assist users with their questions by providing information from your extensive knowledge.
+    Your responses are concise, to the point, and without any complex formatting or punctuation including emojis, asterisks, or other symbols.
+    You are curious, friendly, and have a sense of humor."""
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    instructions = data.get('instructions', '')
+                    if instructions:
+                        logger.info(f"Successfully fetched instructions from API: {api_url}")
+                        return instructions
+                    else:
+                        logger.warning("API response did not contain 'instructions' field, using default")
+                        return default_instructions
+                else:
+                    logger.error(f"API returned status {response.status}, using default instructions")
+                    return default_instructions
+    except aiohttp.ClientError as e:
+        logger.error(f"Failed to fetch instructions from API: {e}, using default instructions")
+        return default_instructions
+    except Exception as e:
+        logger.error(f"Unexpected error fetching instructions: {e}, using default instructions")
+        return default_instructions
 
 
 async def entrypoint(ctx: JobContext):
@@ -111,9 +152,13 @@ async def entrypoint(ctx: JobContext):
     # # Start the avatar and wait for it to join
     # await avatar.start(session, room=ctx.room)
 
+    # Fetch instructions from API
+    api_url = os.getenv('INSTRUCTIONS_API_URL', 'http://localhost:8080/api/instructions')
+    instructions = await fetch_instructions_from_api(api_url)
+    
     # Start the session, which initializes the voice pipeline and warms up the models
     await session.start(
-        agent=Assistant(),
+        agent=Assistant(instructions=instructions),
         room=ctx.room,
         room_input_options=RoomInputOptions(
             # For telephony applications, use `BVCTelephony` for best results
