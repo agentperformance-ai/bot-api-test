@@ -1,7 +1,10 @@
+
+import requests
 import logging
 import os
 import aiohttp
-
+import yaml
+import json
 from dotenv import load_dotenv
 from livekit.agents import (
     Agent,
@@ -16,10 +19,17 @@ from livekit.agents import (
 )
 from livekit.plugins import noise_cancellation, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from livekit.plugins import openai, deepgram
 
 logger = logging.getLogger("agent")
 
-load_dotenv(".env.local")
+load_dotenv(dotenv_path=".env.local")
+
+auth_url = os.getenv("ABP_AUTH_URL")
+tenancy_name = os.getenv("ABP_TENANCY_NAME")
+username = os.getenv("ABP_USERNAME")
+password = os.getenv("ABP_PASSWORD")
+tenant_id = os.getenv("ABP_TENANT_ID")
 
 
 class Assistant(Agent):
@@ -50,6 +60,36 @@ class Assistant(Agent):
     #
     #     return "sunny with a temperature of 70 degrees."
 
+def generate_token(auth_url,username,password,tenant_id):
+    url = f"{auth_url}/api/TokenAuth/Authenticate"
+    print(("URL:", url))
+    # url = "https://api-dev.insureplat.com/api/TokenAuth/Authenticate"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Abp.TenantId": tenant_id
+    }
+
+    payload = {
+        "usernameOrEmailAddress": username,
+        "password": password
+    }
+
+    # print(f"URL: {url}")
+    # print(f"Headers: {headers}")
+    # print(f"Payload: {payload}")
+
+    response = requests.post(url, headers=headers, data=json.dumps(payload))
+
+    # print(f"Status Code: {response.status_code}")
+    if response.status_code == 200:
+        print("Authentication succeeded!")
+        result=response.json()
+        print(result['result']['accessToken'])
+        return result['result']['accessToken']
+    else:
+        print("Authentication failed.")
+    
 
 async def fetch_instructions_from_api(api_url: str) -> str:
     """
@@ -65,23 +105,60 @@ async def fetch_instructions_from_api(api_url: str) -> str:
     You eagerly assist users with their questions by providing information from your extensive knowledge.
     Your responses are concise, to the point, and without any complex formatting or punctuation including emojis, asterisks, or other symbols.
     You are curious, friendly, and have a sense of humor."""
-    
+    token = generate_token(auth_url,username,password,tenant_id)  
+    print("----------------------------------------------")
+    print(token)
+    print("----------------------------------------------")
+    # Optional headers (depends on your API)
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+    # headers = {
+    #     "Content-Type": "application/json",
+    #     "Authorization": f"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjE1MTE3MCIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL25hbWUiOiJtYW51QGdtYWlsLmNvbSIsImh0dHA6Ly9zY2hlbWFzLnhtbHNvYXAub3JnL3dzLzIwMDUvMDUvaWRlbnRpdHkvY2xhaW1zL2VtYWlsYWRkcmVzcyI6Im1hbnVAZ21haWwuY29tIiwiQXNwTmV0LklkZW50aXR5LlNlY3VyaXR5U3RhbXAiOiJaUFVXU0dGWDVVVVBOQ0hGTUFGWUo3VVFQSjNZNFgyNiIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6WyJBZG1pbiIsIlByb3ZpZGVyIl0sImh0dHA6Ly93d3cuYXNwbmV0Ym9pbGVycGxhdGUuY29tL2lkZW50aXR5L2NsYWltcy90ZW5hbnRJZCI6IjEwNDI2Iiwic3ViIjoiMTUxMTcwIiwianRpIjoiYzZiOGEwNzQtMDU0Yy00ODA4LWJmNDAtYWQ0MDQ0N2Q5YTQ5IiwiaWF0IjoxNzYxMjk4NTM3LCJuYmYiOjE3NjEyOTg1MzcsImV4cCI6MTc2MTM4NDkzNywiaXNzIjoiSW5zdXJlcGxhdCIsImF1ZCI6Ikluc3VyZXBsYXQifQ.mhfb8_Tv08booElSalcONycFilhkXrPECnRuOEXQGE4"
+    # }
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            # async with session.get(api_url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            async with session.post(api_url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status == 200:
-                    data = await response.json()
-                    result = data.get("result", {})
+                    # data = await response.json()
+                    # result = data.get("result", {})
+                    
+                    result = await response.text()
+                    # data = json.loads(result)
+
+                    # # Step 2: Extract the YAML string from "message"
+                    # yaml_text = data.get("message", "")
+
+                    # # Step 3: Parse YAML text
+                    # parsed = yaml.safe_load(yaml_text)
+
+                    # # Step 4: Access botflow
+                    # botflow = parsed.get("botflow")
+                    print("----------------------------------------------------------------------")
                     logger.info(f"API results: {result}")
+                    print("----------------------------------------------------------------------")
                     
                     # Extract instructions from the API response
                     # Adjust this based on your actual API response structure
-                    lead_meta = result.get("leadProfileMetadata") or {}
-                    logger.info(f"Lead metadata: {lead_meta}")
+                    # lead_meta = result.get("leadProfileMetadata") or {}
+                    # logger.info(f"Lead metadata: {lead_meta}")
                     
+                    # api_instructions = result.get("botflow")
+                    # print("--------------------------------------------------------")
+                    # logger.info(f"API Instructions: {api_instructions}")
+                    # print("--------------------------------------------------------")
+
                     # Get prompt or instructions from the result
-                    instructions = result.get("prompt") or lead_meta.get("instructions") or ""
+                    # instructions = result.get("prompt") or lead_meta.get("instructions") or ""
+                    instructions = result or ""
+                    print("--------------------------------------------------------")
+                    logger.info(f"Instructions: {instructions}")
+                    print("--------------------------------------------------------")
                     
+
                     if instructions:
                         logger.info(f"Successfully fetched instructions from API: {api_url}")
                         return instructions
@@ -112,21 +189,13 @@ async def entrypoint(ctx: JobContext):
 
     # Set up a voice AI pipeline using OpenAI, Cartesia, AssemblyAI, and the LiveKit turn detector
     session = AgentSession(
-        # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
-        # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt="assemblyai/universal-streaming:en",
-        # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
-        # See all available models at https://docs.livekit.io/agents/models/llm/
-        llm="openai/gpt-4.1-mini",
-        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
-        # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
-        tts="cartesia/sonic-2:9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
-        # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
-        # See more at https://docs.livekit.io/agents/build/turns
+        stt=deepgram.STT(model="nova-3",mip_opt_out=True),
+        llm=openai.LLM(model="gpt-4o-mini", service_tier = "priority"),
+        tts=deepgram.TTS(
+        model="aura-asteria-en",
+        ),
         turn_detection=MultilingualModel(),
-        vad=ctx.proc.userdata["vad"],
-        # allow the LLM to generate a response while waiting for the end of turn
-        # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
+        vad=ctx.proc.userdata["vad"], 
         preemptive_generation=True,
     )
 
@@ -164,9 +233,12 @@ async def entrypoint(ctx: JobContext):
     # await avatar.start(session, room=ctx.room)
 
     # Fetch instructions from API
-    api_url = os.getenv('INSTRUCTIONS_API_URL', 'http://api-dev.insureplat.com/api/services/app/Bot/flattenBot?botId=202&version=2')
+    # api_url = os.getenv('INSTRUCTIONS_API_URL', 'http://api-dev.insureplat.com/api/services/app/Bot/flattenBot?botId=202&version=6')
+    api_url = os.getenv('FLATTEN_BOT_URL')
     instructions = await fetch_instructions_from_api(api_url)
-    
+    # print("----------------------------------------------------")
+    # logger.info(f"instructions: {instructions}")
+    # print("----------------------------------------------------")
     # Start the session, which initializes the voice pipeline and warms up the models
     await session.start(
         agent=Assistant(instructions=instructions),
@@ -181,5 +253,9 @@ async def entrypoint(ctx: JobContext):
     await ctx.connect()
 
 
+
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
+
+# ----------------------------------------------------------------------------------------------
+
