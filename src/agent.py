@@ -18,7 +18,7 @@ from livekit.agents import (
     metrics,
 )
 from livekit.plugins import noise_cancellation, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
+# from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from livekit.plugins import openai, deepgram
 
 logger = logging.getLogger("agent")
@@ -85,7 +85,7 @@ def generate_token(auth_url,username,password,tenant_id):
     if response.status_code == 200:
         print("Authentication succeeded!")
         result=response.json()
-        print(result['result']['accessToken'])
+        # print(result['result']['accessToken'])
         return result['result']['accessToken']
     else:
         print("Authentication failed.")
@@ -106,9 +106,9 @@ async def fetch_instructions_from_api(api_url: str) -> str:
     Your responses are concise, to the point, and without any complex formatting or punctuation including emojis, asterisks, or other symbols.
     You are curious, friendly, and have a sense of humor."""
     token = generate_token(auth_url,username,password,tenant_id)  
-    print("----------------------------------------------")
-    print(token)
-    print("----------------------------------------------")
+    # print("----------------------------------------------")
+    # print(token)
+    # print("----------------------------------------------")
     # Optional headers (depends on your API)
     headers = {
         "Content-Type": "application/json",
@@ -188,16 +188,16 @@ async def entrypoint(ctx: JobContext):
     }
 
     # Set up a voice AI pipeline using OpenAI, Cartesia, AssemblyAI, and the LiveKit turn detector
-    session = AgentSession(
-        stt=deepgram.STT(model="nova-3",mip_opt_out=True),
-        llm=openai.LLM(model="gpt-4o-mini", service_tier = "priority"),
-        tts=deepgram.TTS(
-        model="aura-asteria-en",
-        ),
-        turn_detection=MultilingualModel(),
-        vad=ctx.proc.userdata["vad"], 
-        preemptive_generation=True,
-    )
+    # session = AgentSession(
+    #     stt=deepgram.STT(model="nova-3",mip_opt_out=True),
+    #     llm=openai.LLM(model="gpt-4o-mini", service_tier = "priority"),
+    #     tts=deepgram.TTS(
+    #     model="aura-asteria-en",
+    #     ),
+    #     turn_detection=MultilingualModel(),
+    #     vad=ctx.proc.userdata["vad"], 
+    #     preemptive_generation=True,
+    # )
 
     # To use a realtime model instead of a voice pipeline, use the following session setup instead.
     # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
@@ -205,9 +205,10 @@ async def entrypoint(ctx: JobContext):
     # 2. Set OPENAI_API_KEY in .env.local
     # 3. Add `from livekit.plugins import openai` to the top of this file
     # 4. Use the following session setup instead of the version above
-    # session = AgentSession(
-    #     llm=openai.realtime.RealtimeModel(voice="marin")
-    # )
+
+    session = AgentSession(
+        llm=openai.realtime.RealtimeModel(voice="marin")
+    )
 
     # Metrics collection, to measure pipeline performance
     # For more information, see https://docs.livekit.io/agents/build/metrics/
