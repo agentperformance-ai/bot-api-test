@@ -249,14 +249,16 @@ async def entrypoint(ctx: JobContext):
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
-
+#     await session.generate_reply(
+#     instructions="Greet the user and offer your assistance."
+#    )
     # Join the room and connect to the user
     await ctx.connect()
 
 
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
+    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm,agent_name="callbot-inbound",))
 
 # ----------------------------------------------------------------------------------------------
 
